@@ -4,14 +4,18 @@ library(rio)
 library(openxlsx)
 library(lubridate)
 library(dplyr)
+library(scales)
 
 devtools::load_all("G:/Analyst Folders/Sara Brumfield/bbmR")
+source("G:/Budget Publications/automation/0_data_prep/bookHelpers/R/formatting.R")
 
-bpfs <- import("G:/Theo/DB Procedures/planningyear-reports/py24/1. CLS/line_items/line_items_2022-10-26.xlsx", which = "Details")
+bpfs <- import("G:/Theo/DB Procedures/planningyear-reports/py24/1. CLS/line_items/line_items_2022-10-27.xlsx", which = "Details")
 
-prior <- import("G:/Fiscal Years/Fiscal 2024/Planning Year/1. CLS/1. Line Item Reports/line_items_2022-09-16_CLS_After_186.xlsx", which = "Details")
+prior <- import("G:/Fiscal Years/Fiscal 2024/Planning Year/1. CLS/1. Line Item Reports/line_items_2022-09-14.xlsx", which = "Details")
   
-maggie <- import("C:/Users/sara.brumfield2/Downloads/Agency Adjustments - Test File.xlsx")
+maggie <- import("G:/Theo/DB Procedures/data_loads/line_item/line_items_2022-10-26_upload to dev.xlsx") %>%
+  select(`agency_id`:`Justification (If any)`) %>%
+  mutate(Amount = round(Amount, 0))
 
 bpfs_changes <- bpfs %>% full_join(prior, by = c("Agency ID",             "Agency Name",           "Program ID",            "Program Name",          "Activity ID",           "Activity Name",        
                                                  "Subactivity ID",        "Subactivity Name",      "Fund ID",               "Fund Name",             "DetailedFund ID",       "DetailedFund Name",    
@@ -26,14 +30,17 @@ maggie_check <- bpfs %>% full_join(maggie, by = c("Agency ID" = "agency_id",
                                                           "DetailedFund ID" = "detailed_fund_id",
                                                           "Object ID" = "object_id",
                                                           "Subobject ID" = "subobject_id")) %>%
-  filter(!is.na(Amount))
+  mutate(Check = case_when(!is.na(Amount) & Amount != `FY24 CLS` ~ "Error",
+                           is.na(Amount) ~ "N/A",
+                           !is.na(Amount) & Amount == `FY24 CLS` ~ "Match",
+                           TRUE ~ "Other"))
 
 check <- maggie_check %>% filter(`FY24 CLS` != Amount)
 
 export_excel(check, "Missing from BPFS", "Missing from BPFS.xlsx")
 
 export_excel(bpfs_changes, "BPFS Changes", "BPFS Before After Comparison.xlsx")
-export_excel(maggie_check, "Test File and BPFS", "BPFS Before After Comparison.xlsx", type = "existing")
+export_excel(maggie_check, "Test File and BPFS", "BPFS Before After Comparison.xlsx", type = "new")
 
 
 bpfs_update <- import("BPFS Line Item Table.xlsx")
