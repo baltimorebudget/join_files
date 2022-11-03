@@ -1,5 +1,4 @@
-.libPaths("C:/Users/sara.brumfield2/OneDrive - Cit
-          y Of Baltimore/Documents/r_library")
+.libPaths("C:/Users/sara.brumfield2/OneDrive - City Of Baltimore/Documents/r_library")
 library(tidyverse)
 library(rio)
 library(openxlsx)

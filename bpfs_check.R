@@ -6,53 +6,47 @@ library(lubridate)
 library(dplyr)
 library(scales)
 
-devtools::load_all("G:/Analyst Folders/Sara Brumfield/bbmR")
+devtools::load_all("G:/Analyst Folders/Sara Brumfield/_packages/bbmR")
 source("G:/Budget Publications/automation/0_data_prep/bookHelpers/R/formatting.R")
 
-bpfs <- import("G:/Theo/DB Procedures/planningyear-reports/py24/1. CLS/line_items/line_items_2022-10-27.xlsx", which = "Details")
+bpfs <- import("G:/Theo/DB Procedures/planningyear-reports/py24/1. CLS/line_items/line_items_2022-11-1.xlsx", which = "Details") %>%
+  mutate_if(is.numeric, round, 0)
 
-prior <- import("G:/Fiscal Years/Fiscal 2024/Planning Year/1. CLS/1. Line Item Reports/line_items_2022-09-14.xlsx", which = "Details")
-  
-maggie <- import("G:/Theo/DB Procedures/data_loads/line_item/line_items_2022-10-26_upload to dev.xlsx") %>%
-  select(`agency_id`:`Justification (If any)`) %>%
-  mutate(Amount = round(Amount, 0))
+prior <- import("G:/Fiscal Years/Fiscal 2024/Planning Year/1. CLS/1. Line Item Reports/line_items_2022-10-28-145PM-FINAL.xlsx", which = "FY24 Line Item")
 
 bpfs_changes <- bpfs %>% full_join(prior, by = c("Agency ID",             "Agency Name",           "Program ID",            "Program Name",          "Activity ID",           "Activity Name",        
                                                  "Subactivity ID",        "Subactivity Name",      "Fund ID",               "Fund Name",             "DetailedFund ID",       "DetailedFund Name",    
                                                  "Object ID",            "Object Name",           "Subobject ID",          "Subobject Name",        "Objective ID",          "Objective Name" )) %>%
-  filter(`FY24 CLS.x` != `FY24 CLS.y`)
+  filter(`FY24 CLS.x` != `FY24 CLS.y` & `Fund ID` == 1001) %>%
+  mutate(`Difference` = `FY24 CLS.y` - `FY24 CLS.x`) %>%
+  select(-ends_with("ID"), -`$ - Change vs Adopted`, -`% - Change vs Adopted`, -`Justification`, -`Globals`, -`FY23 Adopted.x`, -`FY23 Adopted.y`, -`Agency Specific BIOs`, -`...23`, -`...24`, -`...25`, -`...26`, -`...27`) %>%
+  rename(`BPFS CLS` = `FY24 CLS.x`, `Excel CLS` = `FY24 CLS.y`) 
 
-maggie_check <- bpfs %>% full_join(maggie, by = c("Agency ID" = "agency_id",
-                                                          "Program ID" = "program_id",
-                                                          "Activity ID" = "activity_id",
-                                                          "Subactivity ID" = "subactivity_id",
-                                                          "Fund ID" = "fund_id",
-                                                          "DetailedFund ID" = "detailed_fund_id",
-                                                          "Object ID" = "object_id",
-                                                          "Subobject ID" = "subobject_id")) %>%
-  mutate(Check = case_when(!is.na(Amount) & Amount != `FY24 CLS` ~ "Error",
-                           is.na(Amount) ~ "N/A",
-                           !is.na(Amount) & Amount == `FY24 CLS` ~ "Match",
-                           TRUE ~ "Other"))
+bpfs_summary <- bpfs_changes %>%
+  group_by(`Agency Name`) %>%
+  summarize_if(is.numeric, sum, na.rm = TRUE) %>%
+  filter(abs(Difference) > 999999 )
 
-check <- maggie_check %>% filter(`FY24 CLS` != Amount)
+bpfs_total_gf <- sum(filter(bpfs, `Fund ID` == 1001)$`FY24 CLS`, na.rm = TRUE)
+bpfs_target_gf <- 2122884930
+bpfs_diff <- bpfs_target_gf - bpfs_total_gf
 
-export_excel(check, "Missing from BPFS", "Missing from BPFS.xlsx")
+# bpfs_check <- bpfs %>% full_join(prior, by = c("Agency ID" = "agency_id",
+#                                                           "Program ID" = "program_id",
+#                                                           "Activity ID" = "activity_id",
+#                                                           "Subactivity ID" = "subactivity_id",
+#                                                           "Fund ID" = "fund_id",
+#                                                           "DetailedFund ID" = "detailed_fund_id",
+#                                                           "Object ID" = "object_id",
+#                                                           "Subobject ID" = "subobject_id")) %>%
+#   mutate(Check = case_when(!is.na(Amount) & Amount != `FY24 CLS` ~ "Error",
+#                            is.na(Amount) ~ "N/A",
+#                            !is.na(Amount) & Amount == `FY24 CLS` ~ "Match",
+#                            TRUE ~ "Other"))
 
-export_excel(bpfs_changes, "BPFS Changes", "BPFS Before After Comparison.xlsx")
-export_excel(maggie_check, "Test File and BPFS", "BPFS Before After Comparison.xlsx", type = "new")
+# check <- bpfs_check %>% filter(`FY24 CLS` != Amount)
 
+# export_excel(check, "Missing from BPFS", "Missing from BPFS.xlsx")
 
-bpfs_update <- import("BPFS Line Item Table.xlsx")
-
-update_check <- bpfs_update %>% full_join(maggie, by = c("AGENCY_ID" = "agency_id",
-                                                               "PROGRAM_ID" = "program_id",
-                                                               "ACTIVITY_ID" = "activity_id",
-                                                               "SUBACTIVITY_ID" = "subactivity_id",
-                                                               "FUND_ID" = "fund_id",
-                                                               "DETAILED_FUND_ID" = "detailed_fund_id",
-                                                               "OBJECT_ID" = "object_id",
-                                                               "SUBOBJECT_ID" = "subobject_id")) %>%
-  filter(!is.na(Amount))
-
-export_excel(update_check, "BPFS Update", "BPFS Line Item Table Update.xlsx")
+export_excel(bpfs_changes, "All Mismatches", "BPFS Before After Comparison.xlsx", type = "new")
+export_excel(bpfs_summary, "Mismatches over 1M", "BPFS Before After Comparison.xlsx", type = "existing")
